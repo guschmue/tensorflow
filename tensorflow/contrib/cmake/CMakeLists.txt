@@ -29,10 +29,15 @@ option(tensorflow_BUILD_ALL_KERNELS "Build all OpKernels" ON)
 option(tensorflow_BUILD_CONTRIB_KERNELS "Build OpKernels from tensorflow/contrib/..." ON)
 option(tensorflow_BUILD_CC_TESTS "Build cc unit tests " OFF)
 option(tensorflow_BUILD_PYTHON_TESTS "Build python unit tests " OFF)
+option(tensorflow_BUILD_MORE_PYTHON_TESTS "Build more python unit tests for contrib packages" OFF)
 option(tensorflow_BUILD_SHARED_LIB "Build TensorFlow as a shared library" OFF)
 option(tensorflow_OPTIMIZE_FOR_NATIVE_ARCH "Enable compiler optimizations for the native processor architecture (if available)" ON)
 option(tensorflow_WIN_CPU_SIMD_OPTIONS "Enables CPU SIMD instructions")
+<<<<<<< HEAD
 option(tensorflow_ENABLE_MKL "Enable MKL support" OFF)
+=======
+option(tensorflow_ENABLE_SNAPPY_SUPPORT "Enable SNAPPY compression support" ON)
+>>>>>>> master
 
 if (NOT WIN32)
   # Threads: defines CMAKE_THREAD_LIBS_INIT and adds -pthread compile option
@@ -64,7 +69,7 @@ if(WIN32)
   add_definitions(-DWIN32 -DOS_WIN -D_MBCS -DWIN64 -DWIN32_LEAN_AND_MEAN -DNOGDI -DPLATFORM_WINDOWS)
   add_definitions(-DTENSORFLOW_USE_EIGEN_THREADPOOL -DEIGEN_HAS_C99_MATH)
   add_definitions(-DTF_COMPILE_LIBRARY)
-  add_definitions(/bigobj /nologo /EHsc /GF /FC /MP /Gm-)
+  add_definitions(/bigobj /nologo /EHsc /GF /MP /Gm-)
   # Suppress warnings to reduce build log size.
   add_definitions(/wd4267 /wd4244 /wd4800 /wd4503 /wd4554 /wd4996 /wd4348 /wd4018)
   add_definitions(/wd4099 /wd4146 /wd4267 /wd4305 /wd4307)
@@ -75,7 +80,7 @@ if(WIN32)
   set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /ignore:4049 /ignore:4197 /ignore:4217 /ignore:4221")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /ignore:4049 /ignore:4197 /ignore:4217 /ignore:4221")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-  set(CMAKE_CXX_FLAGS_DEBUG "/D_DEBUG /MDd /Ob0")
+  set(CMAKE_CXX_FLAGS_DEBUG "/D_DEBUG /MDd /Ob2")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /D_ITERATOR_DEBUG_LEVEL=0")
   set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} /D_ITERATOR_DEBUG_LEVEL=0")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /D_ITERATOR_DEBUG_LEVEL=0")
@@ -114,13 +119,18 @@ include(zlib)
 include(gif)
 include(png)
 include(jpeg)
+include(lmdb)
 include(eigen)
 include(gemmlowp)
 include(jsoncpp)
 include(farmhash)
 include(fft2d)
 include(highwayhash)
+include(nsync)
 include(protobuf)
+include(re2)
+include(cub)
+include(sqlite)
 if (tensorflow_BUILD_CC_TESTS)
   include(googletest)
 endif()
@@ -130,24 +140,33 @@ set(tensorflow_EXTERNAL_LIBRARIES
     ${gif_STATIC_LIBRARIES}
     ${png_STATIC_LIBRARIES}
     ${jpeg_STATIC_LIBRARIES}
+    ${lmdb_STATIC_LIBRARIES}
     ${jsoncpp_STATIC_LIBRARIES}
     ${farmhash_STATIC_LIBRARIES}
     ${fft2d_STATIC_LIBRARIES}
     ${highwayhash_STATIC_LIBRARIES}
+    ${nsync_STATIC_LIBRARIES}
     ${protobuf_STATIC_LIBRARIES}
+    ${re2_STATIC_LIBRARIES}
+    ${sqlite_STATIC_LIBRARIES}
 )
 set(tensorflow_EXTERNAL_DEPENDENCIES
     zlib_copy_headers_to_destination
     gif_copy_headers_to_destination
     png_copy_headers_to_destination
     jpeg_copy_headers_to_destination
+    lmdb_copy_headers_to_destination
     jsoncpp
     farmhash_copy_headers_to_destination
     highwayhash_copy_headers_to_destination
+    nsync_copy_headers_to_destination
     protobuf
     eigen
     gemmlowp
+    cub
     fft2d
+    re2
+    sqlite_copy_headers_to_destination
 )
 
 include_directories(
@@ -159,12 +178,17 @@ include_directories(
     ${gif_INCLUDE_DIR}
     ${png_INCLUDE_DIR}
     ${jpeg_INCLUDE_DIR}
+    ${lmdb_INCLUDE_DIR}
     ${eigen_INCLUDE_DIRS}
     ${gemmlowp_INCLUDE_DIR}
     ${jsoncpp_INCLUDE_DIR}
     ${farmhash_INCLUDE_DIR}
     ${highwayhash_INCLUDE_DIR}
+    ${cub_INCLUDE_DIR}
+    ${nsync_INCLUDE_DIR}
     ${PROTOBUF_INCLUDE_DIRS}
+    ${re2_INCLUDE_DIR}
+    ${sqlite_INCLUDE_DIR}
 )
 
 if(tensorflow_ENABLE_SSL_SUPPORT)
@@ -184,6 +208,12 @@ if(tensorflow_ENABLE_JEMALLOC_SUPPORT)
   list(APPEND tensorflow_EXTERNAL_LIBRARIES ${jemalloc_STATIC_LIBRARIES})
   list(APPEND tensorflow_EXTERNAL_DEPENDENCIES jemalloc)
   include_directories(${jemalloc_INCLUDE_DIRS})
+endif()
+if(tensorflow_ENABLE_SNAPPY_SUPPORT)
+  include(snappy)
+  list(APPEND tensorflow_EXTERNAL_LIBRARIES ${snappy_STATIC_LIBRARIES})
+  list(APPEND tensorflow_EXTERNAL_DEPENDENCIES snappy)
+  include_directories(${snappy_INCLUDE_DIR})
 endif()
 if(WIN32)
   list(APPEND tensorflow_EXTERNAL_LIBRARIES wsock32 ws2_32 shlwapi)
@@ -206,6 +236,9 @@ if (tensorflow_ENABLE_GPU)
     add_definitions(-DGOOGLE_CUDA=1 -DTF_EXTRA_CUDA_CAPABILITIES=3.0,3.5,5.2)
 
     # add cudnn
+    if(NOT CUDNN_HOME)
+      set(CUDNN_HOME ${CUDA_TOOLKIT_TARGET_DIR})
+    endif(NOT CUDNN_HOME)
     include_directories(${CUDNN_HOME})
     set(CUDA_LIBRARIES ${CUDA_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUBLAS_LIBRARIES} ${CUDA_CUFFT_LIBRARIES}
       ${CUDA_curand_LIBRARY} ${CUDA_cupti_LIBRARY} ${CUDA_cusolver_LIBRARY} ${CUDNN_HOME}/lib/x64/cudnn.lib)
@@ -216,7 +249,7 @@ if (tensorflow_ENABLE_GPU)
       "#define CUDA_CUDA_CONFIG_H_\n"
       "#define TF_CUDA_CAPABILITIES CudaVersion(\"3.0\"),CudaVersion(\"3.5\"),CudaVersion(\"5.2\")\n"
       "#define TF_CUDA_VERSION \"64_80\"\n"
-      "#define TF_CUDNN_VERSION \"64_5\"\n"
+      "#define TF_CUDNN_VERSION \"64_6\"\n"
       "#define TF_CUDA_TOOLKIT_PATH \"${CUDA_TOOLKIT_ROOT_DIR}\"\n"
       "#endif  // CUDA_CUDA_CONFIG_H_\n"
     )
@@ -235,8 +268,23 @@ if (tensorflow_ENABLE_GPU)
     include_directories(${tensorflow_source_dir}/third_party/gpus)
     # add cuda libraries to tensorflow_EXTERNAL_LIBRARIES
     list(APPEND tensorflow_EXTERNAL_LIBRARIES ${CUDA_LIBRARIES})
-  endif()
-endif()
+
+    # NOTE(mrry): Update these flags when the version of CUDA or cuDNN used
+    # in the default build is upgraded.
+    set(tensorflow_BUILD_INFO_FLAGS --build_config cuda --key_value
+      msvcp_dll_name=msvcp140.dll
+      cudart_dll_name=cudart64_80.dll
+      cuda_version_number=8.0
+      nvcuda_dll_name=nvcuda.dll
+      cudnn_dll_name=cudnn64_6.dll
+      cudnn_version_number=6)
+  else(WIN32)
+    message(FATAL_ERROR "CMake GPU build is currently only supported on Windows.")
+  endif(WIN32)
+else(tensorflow_ENABLE_GPU)
+  set(tensorflow_BUILD_INFO_FLAGS --build_config cpu --key_value
+    msvcp_dll_name=msvcp140.dll)
+endif(tensorflow_ENABLE_GPU)
 
 if (tensorflow_ENABLE_MKL AND WIN32)
   include(mkl)
@@ -273,6 +321,7 @@ endif()
 include(tf_cc_ops.cmake)
 include(tf_c.cmake)
 include(tf_grappler.cmake)
+include(tf_core_profiler.cmake)
 if(tensorflow_BUILD_CC_EXAMPLE)
   include(tf_tutorials.cmake)
   include(tf_label_image_example.cmake)
